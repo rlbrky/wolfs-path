@@ -10,12 +10,12 @@ This game offers a simple save system, custom physics for faster movement, simpl
 -Dash\
 -Ladder climb\
 -Save system\
--Skills that can be changed in save spots.\
+-Skills that can be changed in save spots.
 
 
 ### Showcase
 
-A video that shows combat can be seen on these links:\
+A video that shows combat can be seen on these links:
 
 https://youtu.be/9JFC1B1QvC0 \
 https://youtu.be/tcrMhkGtEcs
