@@ -1,0 +1,118 @@
+using System.Collections;
+using UnityEngine;
+
+public class Bomber_Events : MonoBehaviour, IEnemyEvents
+{
+    public Bomber_Context context;
+    [SerializeField] private Collider[] collidersToIgnore;
+    [SerializeField] private Bomber_BombSC bombPrefab;
+    [SerializeField] private Transform handLoc;
+
+    private Bomber_BombSC tempBomb;
+
+    private void Awake()
+    {
+        tempBomb = Instantiate(bombPrefab, handLoc.position, Quaternion.identity);
+        var tempBombCollider = tempBomb.GetComponent<SphereCollider>();
+        Physics.IgnoreCollision(tempBombCollider, transform.GetComponentInChildren<BoxCollider>(), true);
+        Physics.IgnoreCollision(tempBombCollider, transform.GetComponent<CapsuleCollider>(), true);
+        foreach (var collider in collidersToIgnore)
+        {
+            Physics.IgnoreCollision(tempBombCollider, collider, true);
+        }
+    }
+
+    private void Start()
+    {
+        context._Rigidbody.useGravity = true;
+        context.OwnCollider.enabled = true;
+        tempBomb.stateMachine = context.StateMachine;
+        tempBomb.gameObject.SetActive(false);
+    }
+
+    public void SpawnBomb()
+    {
+        tempBomb.timer = 0;
+        tempBomb.transform.position = handLoc.position;
+        tempBomb.gameObject.SetActive(true);
+        tempBomb.damage = context.Damage;
+        tempBomb.speed = context.BombSpeed;
+        tempBomb.direction = Vector3.zero;
+    }
+
+    public void ThrowBomb()
+    {
+        tempBomb.direction = context.BombDir;
+        context.SetState(Bomber_StateMachine.BomberState.Idle);
+    }
+
+    public void GetHit(Vector3 dir, float knockbackForce, int damageType, float damageAmount)
+    {
+        PlayerCombat.instance.HitStop(PlayerCombat.instance.stopDuration);
+        context._Rigidbody.linearVelocity = Vector3.zero;
+        context.EnemyHealth.DamageUnit(damageAmount);
+        AudioChooser.instance.PlayRandomHitSFX();
+        context.ImpulseSource.GenerateImpulse(new Vector3(0.5f, 0));
+        context.BloodVFX.Play();
+
+        if (PlayerCombat.instance.shouldThrow)
+        {
+            context.GotAirHit = true;
+            context._Animator.SetTrigger("getThrown");
+            context.GotThrown = true;
+            context.AirOffset = new Vector3(PlayerMovement.instance.transform.forward.x * 2.5f, 0);
+
+            context._Rigidbody.useGravity = false;
+            StartCoroutine(ResetGravUsage());
+
+            return;
+        }
+
+        if (context.IsGrounded)
+        {
+            context._Rigidbody.AddForce(dir * knockbackForce, ForceMode.Impulse);
+            switch (damageType)
+            {
+                case 0:
+                    context._Animator.SetTrigger("GetHit");
+                    break;
+                case 1:
+                    context._Animator.SetTrigger("HeavyGetHit");
+                    break;
+            }
+        }
+        else
+        {
+            context.GotAirHit = true;
+            context.AirOffset = new Vector3(PlayerMovement.instance.transform.forward.x * 2.5f, 0);
+            context._Animator.SetTrigger("getHit_Air");
+            if (PlayerCombat.instance.knockEnemyDown)
+                context._Rigidbody.AddForce(Vector3.down * PlayerCombat.instance.airFinisherForce, ForceMode.Impulse);
+        }
+
+        context.IsAttacking = false;
+        context.IsStunned = true;
+        if(context.EnemyHealth.Health <= 0)
+        {
+            context._Animator.SetTrigger("Die");
+            context.StateMachine.TEST = true;
+            StartCoroutine(DeathRoutine());
+        }
+        context.SetState(Bomber_StateMachine.BomberState.Idle);
+    }
+
+    IEnumerator ResetGravUsage()
+    {
+        yield return new WaitForSeconds(0.2f);
+        context._Rigidbody.useGravity = true;
+    }
+
+    IEnumerator DeathRoutine()
+    {
+        PlayerCombat.instance.killedEnemies.Add(context.StateMachine);
+        context._Rigidbody.useGravity = false;
+        context.OwnCollider.enabled = false;
+        yield return new WaitForSeconds(3);
+        gameObject.SetActive(false);
+    }
+}
